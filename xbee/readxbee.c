@@ -7,12 +7,9 @@
 #include <sys/types.h>
 #include "readxbee.h"
 
-/* baudrate settings are defined in <asm/termbits.h>, which is
-included by <termios.h> */
 #define BAUDRATE B9600            
-/* change this definition for the correct port */
 #define MODEMDEVICE "/dev/ttyUSB2"
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
+#define _POSIX_SOURCE 1 
 
 #define FALSE 0
 #define TRUE 1
@@ -29,50 +26,19 @@ int main(int argc, char** argv)
   struct xbee_frame xfrm;
   uint8_t* data_for_chksum;
   uint8_t chksum;
-/* 
-  Open modem device for reading and writing and not as controlling tty
-  because we don't want to get killed if linenoise sends CTRL-C.
-*/
- fd = open(MODEMDEVICE, O_RDWR | O_NOCTTY ); 
- if (fd <0) {perror(MODEMDEVICE); exit(-1); }
 
- tcgetattr(fd,&oldtio); /* save current serial port settings */
- bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
+  fd = open(MODEMDEVICE, O_RDWR | O_NOCTTY ); 
+  if (fd <0) {
+    perror(MODEMDEVICE); 
+    exit(-1);
+  }
 
-/* 
-  BAUDRATE: Set bps rate. You could also use cfsetispeed and cfsetospeed.
-  CRTSCTS : output hardware flow control (only used if the cable has
-            all necessary lines. See sect. 7 of Serial-HOWTO)
-  CS8     : 8n1 (8bit,no parity,1 stopbit)
-  CLOCAL  : local connection, no modem contol
-  CREAD   : enable receiving characters
-*/
+ tcgetattr(fd,&oldtio);
+ bzero(&newtio, sizeof(newtio));
  newtio.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
- 
-/*
-  IGNPAR  : ignore bytes with parity errors
-  ICRNL   : map CR to NL (otherwise a CR input on the other computer
-            will not terminate input)
-  otherwise make device raw (no other input processing)
-*/
  newtio.c_iflag = IGNPAR | ICRNL;
- 
-/*
- Raw output.
-*/
  newtio.c_oflag = 0;
- 
-/*
-  ICANON  : enable canonical input
-  disable all echo functionality, and don't send signals to calling program
-*/
  newtio.c_lflag = 0; // ICANON;
- 
-/* 
-  initialize all control characters 
-  default values can be found in /usr/include/termios.h, and are given
-  in the comments, but we don't need them here
-*/
  newtio.c_cc[VINTR]    = 0;     /* Ctrl-c */ 
  newtio.c_cc[VQUIT]    = 0;     /* Ctrl-\ */
  newtio.c_cc[VERASE]   = 0;     /* del */
@@ -91,26 +57,12 @@ int main(int argc, char** argv)
  newtio.c_cc[VLNEXT]   = 0;     /* Ctrl-v */
  newtio.c_cc[VEOL2]    = 0;     /* '\0' */
 
-/* 
-  now clean the modem line and activate the settings for the port
-*/
  tcflush(fd, TCIFLUSH);
  tcsetattr(fd,TCSANOW,&newtio);
-
-/*
-  terminal settings done, now handle input
-  In this example, inputting a 'z' at the beginning of a line will 
-  exit the program.
-*/
- while (STOP==FALSE) {     /* loop until we have a terminating condition */
- /* read blocks program execution until a line terminating character is 
-    input, even if more than 255 chars are input. If the number
-    of characters read is smaller than the number of chars available,
-    subsequent reads will return the remaining chars. res will be set
-    to the actual number of characters actually read */
+ while (STOP==FALSE) {
     res = read(fd,buf,255);
     if (res>0) {
-      buf[res]=0;             /* set end of string, so we can printf */
+      buf[res]=0;
       for (i=0;i<res;i++) {
         if (buf[i] == 0x7E) {
           start_byte = i;
@@ -145,7 +97,6 @@ int main(int argc, char** argv)
 
     if (buf[0]=='z') STOP=TRUE;
   }
- /* restore the old port settings */
  tcsetattr(fd,TCSANOW,&oldtio);
 
  return (EXIT_SUCCESS);
